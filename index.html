@@ -217,23 +217,41 @@
             return new Promise((resolve, reject) => {
                 const video = document.createElement('video');
                 video.preload = 'metadata';
+                let startTime;
+                let frameCount = 0;
+        
                 video.onloadedmetadata = () => {
-                    URL.revokeObjectURL(video.src);
-                    let fps = 0;
-                    if (video.mozHasAudio !== undefined) {
-                        fps = video.mozFrameRate || 0;
-                    } else if (video.webkitAudioDecodedByteCount !== undefined) {
-                        fps = video.webkitDecodedFrameCount / video.duration;
-                    }
-                    resolve({
-                        duration: video.duration,
-                        width: video.videoWidth,
-                        height: video.videoHeight,
-                        fps: fps
-                    });
+                    video.currentTime = 0;
+                    startTime = performance.now();
+                    requestAnimationFrame(countFrames);
                 };
-                video.onerror = () => reject(new Error("Invalid video file or unsupported format"));
+        
+                function countFrames() {
+                    frameCount++;
+                    const elapsed = (performance.now() - startTime) / 1000; // Convert to seconds
+                    if (elapsed < 1) { // Count frames for 1 second
+                        video.currentTime += 1/60; // Advance by 1/60th of a second
+                        requestAnimationFrame(countFrames);
+                    } else {
+                        const fps = frameCount / elapsed;
+                        URL.revokeObjectURL(video.src);
+                        resolve({
+                            duration: video.duration,
+                            width: video.videoWidth,
+                            height: video.videoHeight,
+                            fps: fps
+                        });
+                    }
+                }
+        
+                video.onerror = () => {
+                    URL.revokeObjectURL(video.src);
+                    reject(new Error("Invalid video file or unsupported format"));
+                };
+        
                 video.src = URL.createObjectURL(file);
+        
+                // Fallback if metadata loading takes too long
                 setTimeout(() => {
                     URL.revokeObjectURL(video.src);
                     resolve({
@@ -245,7 +263,7 @@
                 }, 5000);
             });
         }
-
+        
         function displayResults() {
             dropText.textContent = "Drag and drop video files or folders here";
             resultDiv.innerHTML = `
