@@ -48,10 +48,6 @@
         button:hover {
             background-color: #f0f0f0;
         }
-        button:disabled {
-            background-color: #cccccc;
-            cursor: not-allowed;
-        }
         #dropZone {
             border: 2px dashed #ffffff;
             border-radius: 20px;
@@ -62,84 +58,35 @@
         #dropZone.highlight {
             background-color: rgba(255, 255, 255, 0.1);
         }
-        #progressContainer {
-            margin-bottom: 20px;
-        }
-        #progressBar {
-            width: 100%;
-            background-color: #ddd;
-            border-radius: 5px;
-            overflow: hidden;
-        }
-        #progressBar div {
-            height: 10px;
-            background-color: #ffffff;
-            transition: width 0.3s ease;
-        }
-        #fileList, #totalDuration, #error {
+        #result {
             margin-top: 20px;
             padding: 10px;
             background-color: rgba(255, 255, 255, 0.1);
             border-radius: 5px;
-        }
-        footer {
-            margin-top: 40px;
-            font-size: 14px;
-        }
-        footer a {
-            color: #ffffff;
-            text-decoration: none;
-        }
-        footer a:hover {
-            text-decoration: underline;
         }
     </style>
 </head>
 <body>
     <div class="container">
         <h1>Video Metadata Extractor</h1>
-        <p>Extract metadata from your video files right in your browser. No uploads needed - all processing is done locally on your device.</p>
-        
         <div id="dropZone">
             <p>Drag and drop video files or folders here</p>
             <p>Or</p>
             <input type="file" id="fileInput" multiple webkitdirectory directory style="display: none;">
             <button id="selectFiles">Select Files</button>
         </div>
-
-        <div id="progressContainer" style="display: none;">
-            <div id="progressBar"><div></div></div>
-            <span id="progressText">0%</span>
-        </div>
-
-        <div id="error"></div>
-        <div id="fileList"></div>
-        <div id="totalDuration"></div>
+        <div id="result"></div>
     </div>
-
-    <footer>
-        <p>© 2024 Video Metadata Extractor. All rights reserved.</p>
-        <p>This application processes all files locally in your browser. No data is uploaded or stored on any server.</p>
-        <p>
-            <a href="#" onclick="showPrivacyPolicy()">Privacy Policy</a> | 
-            <a href="#" onclick="showTermsOfUse()">Terms of Use</a>
-        </p>
-    </footer>
 
     <script>
         const dropZone = document.getElementById('dropZone');
         const fileInput = document.getElementById('fileInput');
         const selectFiles = document.getElementById('selectFiles');
-        const fileList = document.getElementById('fileList');
-        const errorDiv = document.getElementById('error');
-        const progressContainer = document.getElementById('progressContainer');
-        const progressBar = document.getElementById('progressBar').firstElementChild;
-        const progressText = document.getElementById('progressText');
-        const totalDurationDiv = document.getElementById('totalDuration');
+        const resultDiv = document.getElementById('result');
 
-        let totalDuration = 0;
-        let processedFiles = 0;
         let totalFiles = 0;
+        let totalSize = 0;
+        let totalDuration = 0;
 
         selectFiles.addEventListener('click', () => fileInput.click());
 
@@ -177,14 +124,14 @@
                     }
                 }
             }
-            startProcessing();
+            displayResults();
         }
 
         async function traverseFileTree(item) {
             if (item.isFile) {
                 const file = await new Promise(resolve => item.file(resolve));
                 if (file.type.startsWith('video/')) {
-                    totalFiles++;
+                    await processVideoFile(file);
                 }
             } else if (item.isDirectory) {
                 const dirReader = item.createReader();
@@ -203,99 +150,50 @@
             resetState();
             for (let file of files) {
                 if (file.type.startsWith('video/')) {
-                    totalFiles++;
-                }
-            }
-            startProcessing();
-            for (let file of files) {
-                if (file.type.startsWith('video/')) {
                     await processVideoFile(file);
                 }
             }
+            displayResults();
         }
 
         function resetState() {
-            totalDuration = 0;
-            processedFiles = 0;
             totalFiles = 0;
-            fileList.innerHTML = '';
-            errorDiv.textContent = '';
-            totalDurationDiv.textContent = '';
-            showProgress();
-        }
-
-        function showProgress() {
-            progressContainer.style.display = 'block';
-            updateProgress(0);
-        }
-
-        async function startProcessing() {
-            if (totalFiles === 0) {
-                errorDiv.textContent = 'No video files found. Please try again with video files.';
-                hideProgress();
-                return;
-            }
-            updateProgress(0);
+            totalSize = 0;
+            totalDuration = 0;
+            resultDiv.textContent = '';
         }
 
         async function processVideoFile(file) {
             try {
-                const metadata = await getVideoMetadata(file);
-                totalDuration += metadata.duration;
-                displayFileInfo(file, metadata);
+                const duration = await getVideoDuration(file);
+                totalFiles++;
+                totalSize += file.size;
+                totalDuration += duration;
             } catch (error) {
                 console.error(`Error processing ${file.name}:`, error);
-                errorDiv.textContent = `Error processing ${file.name}: ${error.message}`;
             }
-            processedFiles++;
-            updateProgress((processedFiles / totalFiles) * 100);
         }
 
-        function getVideoMetadata(file) {
+        function getVideoDuration(file) {
             return new Promise((resolve, reject) => {
                 const video = document.createElement('video');
                 video.preload = 'metadata';
                 video.onloadedmetadata = () => {
                     URL.revokeObjectURL(video.src);
-                    resolve({
-                        duration: video.duration,
-                        width: video.videoWidth,
-                        height: video.videoHeight
-                    });
+                    resolve(video.duration);
                 };
                 video.onerror = () => reject(new Error("Invalid video file or unsupported format"));
                 video.src = URL.createObjectURL(file);
-
                 setTimeout(() => reject(new Error("Timeout: Video took too long to load")), 30000);
             });
         }
 
-        function displayFileInfo(file, metadata) {
-            const fileInfo = document.createElement('div');
-            fileInfo.innerHTML = `
-                <h2>${file.name}</h2>
-                <p>Duration: ${formatDuration(metadata.duration)}</p>
-                <p>Resolution: ${metadata.width}x${metadata.height}</p>
-                <p>Size: ${formatFileSize(file.size)}</p>
+        function displayResults() {
+            resultDiv.innerHTML = `
+                <p>Total Video Files: ${totalFiles}</p>
+                <p>Total Size: ${formatFileSize(totalSize)}</p>
+                <p>Total Duration: ${formatDuration(totalDuration)}</p>
             `;
-            fileList.appendChild(fileInfo);
-        }
-
-        function updateProgress(percentage) {
-            progressBar.style.width = `${percentage}%`;
-            progressText.textContent = `${Math.round(percentage)}%`;
-            if (percentage === 100) {
-                setTimeout(hideProgress, 1000);
-                displayTotalDuration();
-            }
-        }
-
-        function hideProgress() {
-            progressContainer.style.display = 'none';
-        }
-
-        function displayTotalDuration() {
-            totalDurationDiv.textContent = `Total Duration: ${formatDuration(totalDuration)}`;
         }
 
         function formatDuration(seconds) {
@@ -310,14 +208,6 @@
             if (bytes === 0) return '0 Byte';
             const i = parseInt(Math.floor(Math.log(bytes) / Math.log(1024)));
             return Math.round(bytes / Math.pow(1024, i), 2) + ' ' + sizes[i];
-        }
-
-        function showPrivacyPolicy() {
-            alert('Privacy Policy: This application does not collect or store any of your data. All processing is done locally in your browser.');
-        }
-
-        function showTermsOfUse() {
-            alert('Terms of Use: Use this application at your own risk. We are not responsible for any data loss or damages.');
         }
     </script>
 </body>
