@@ -90,7 +90,6 @@
         let totalSize = 0;
         let totalDuration = 0;
         let dimensions = new Set();
-        let frameRates = new Set();
 
         selectFiles.addEventListener('click', () => fileInput.click());
 
@@ -188,7 +187,6 @@
             totalSize = 0;
             totalDuration = 0;
             dimensions.clear();
-            frameRates.clear();
             resultDiv.textContent = '';
             dropText.textContent = "calculating...";
         }
@@ -205,9 +203,6 @@
                 if (metadata.width && metadata.height) {
                     dimensions.add(`${metadata.width}x${metadata.height}`);
                 }
-                if (metadata.fps) {
-                    frameRates.add(metadata.fps.toFixed(2));
-                }
             } catch (error) {
                 console.error(`Error processing ${file.name}:`, error);
             }
@@ -217,53 +212,27 @@
             return new Promise((resolve, reject) => {
                 const video = document.createElement('video');
                 video.preload = 'metadata';
-                let startTime;
-                let frameCount = 0;
-        
                 video.onloadedmetadata = () => {
-                    video.currentTime = 0;
-                    startTime = performance.now();
-                    requestAnimationFrame(countFrames);
-                };
-        
-                function countFrames() {
-                    frameCount++;
-                    const elapsed = (performance.now() - startTime) / 1000; // Convert to seconds
-                    if (elapsed < 1) { // Count frames for 1 second
-                        video.currentTime += 1/60; // Advance by 1/60th of a second
-                        requestAnimationFrame(countFrames);
-                    } else {
-                        const fps = frameCount / elapsed;
-                        URL.revokeObjectURL(video.src);
-                        resolve({
-                            duration: video.duration,
-                            width: video.videoWidth,
-                            height: video.videoHeight,
-                            fps: fps
-                        });
-                    }
-                }
-        
-                video.onerror = () => {
                     URL.revokeObjectURL(video.src);
-                    reject(new Error("Invalid video file or unsupported format"));
+                    resolve({
+                        duration: video.duration,
+                        width: video.videoWidth,
+                        height: video.videoHeight
+                    });
                 };
-        
+                video.onerror = () => reject(new Error("Invalid video file or unsupported format"));
                 video.src = URL.createObjectURL(file);
-        
-                // Fallback if metadata loading takes too long
                 setTimeout(() => {
                     URL.revokeObjectURL(video.src);
                     resolve({
                         duration: 0,
                         width: 0,
-                        height: 0,
-                        fps: 0
+                        height: 0
                     });
                 }, 5000);
             });
         }
-        
+
         function displayResults() {
             dropText.textContent = "Drag and drop video files or folders here";
             resultDiv.innerHTML = `
@@ -271,7 +240,6 @@
                 <p>Total Size: ${formatFileSize(totalSize)}</p>
                 <p>Total Duration: ${formatDuration(totalDuration)}</p>
                 <p>Detected Dimensions: ${Array.from(dimensions).join(', ') || 'None detected'}</p>
-                <p>Detected Frame Rates: ${Array.from(frameRates).join(', ') || 'None detected'}</p>
             `;
         }
 
