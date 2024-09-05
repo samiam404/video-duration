@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>videoDirectoryOverview 1.0</title>
+    <title>videoOverview 1.0</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
     <style>
         html, body {
@@ -68,7 +68,7 @@
 </head>
 <body>
     <div class="container">
-        <h1>videoDirectoryOverview 1.0</h1>
+        <h1>videoOverview 1.0</h1>
         <div id="dropZone">
             <p id="dropText">Drag and drop video files or folders here</p>
             <p>Or</p>
@@ -86,6 +86,7 @@
         const dropText = document.getElementById('dropText');
 
         let totalFiles = 0;
+        let processedFiles = 0;
         let totalSize = 0;
         let totalDuration = 0;
         let dimensions = new Set();
@@ -114,66 +115,91 @@
 
         async function handleFileSelect(e) {
             const files = e.target.files;
-            await processFiles(files);
+            await processFiles(Array.from(files));
         }
 
         async function processItems(items) {
             resetState();
-            dropText.textContent = "calculating....";
+            const files = await getAllFiles(items);
+            await processFiles(files);
+        }
+
+        async function getAllFiles(items) {
+            let files = [];
             for (let item of items) {
                 if (item.kind === 'file') {
                     const entry = item.webkitGetAsEntry();
                     if (entry) {
-                        await traverseFileTree(entry);
+                        if (entry.isFile) {
+                            files.push(await getFile(entry));
+                        } else if (entry.isDirectory) {
+                            files = files.concat(await getFilesFromDirectory(entry));
+                        }
                     }
                 }
             }
-            displayResults();
+            return files;
         }
 
-        async function traverseFileTree(item) {
-            if (item.isFile) {
-                const file = await new Promise(resolve => item.file(resolve));
-                if (file.type.startsWith('video/') || file.name.toLowerCase().endsWith('.mxf')) {
-                    await processVideoFile(file);
+        async function getFile(fileEntry) {
+            return new Promise((resolve, reject) => {
+                fileEntry.file(resolve, reject);
+            });
+        }
+
+        async function getFilesFromDirectory(dirEntry) {
+            const dirReader = dirEntry.createReader();
+            const entries = await readEntriesPromise(dirReader);
+            const files = await Promise.all(entries.map(async (entry) => {
+                if (entry.isFile) {
+                    return await getFile(entry);
+                } else if (entry.isDirectory) {
+                    return await getFilesFromDirectory(entry);
                 }
-            } else if (item.isDirectory) {
-                const dirReader = item.createReader();
-                await new Promise(resolve => {
-                    dirReader.readEntries(async (entries) => {
-                        for (let entry of entries) {
-                            await traverseFileTree(entry);
-                        }
-                        resolve();
-                    });
-                });
-            }
+            }));
+            return files.flat();
+        }
+
+        function readEntriesPromise(dirReader) {
+            return new Promise((resolve, reject) => {
+                dirReader.readEntries(resolve, reject);
+            });
         }
 
         async function processFiles(files) {
             resetState();
-            dropText.textContent = "calculating....";
+            totalFiles = files.filter(file => file.type.startsWith('video/') || file.name.toLowerCase().endsWith('.mxf')).length;
+            updateProgress();
+            
             for (let file of files) {
                 if (file.type.startsWith('video/') || file.name.toLowerCase().endsWith('.mxf')) {
                     await processVideoFile(file);
+                    processedFiles++;
+                    updateProgress();
                 }
             }
+            
             displayResults();
         }
 
         function resetState() {
             totalFiles = 0;
+            processedFiles = 0;
             totalSize = 0;
             totalDuration = 0;
             dimensions.clear();
             frameRates.clear();
             resultDiv.textContent = '';
+            dropText.textContent = "calculating...";
+        }
+
+        function updateProgress() {
+            dropText.textContent = `calculating... ${processedFiles}/${totalFiles} files`;
         }
 
         async function processVideoFile(file) {
             try {
                 const metadata = await getVideoMetadata(file);
-                totalFiles++;
                 totalSize += file.size;
                 totalDuration += metadata.duration;
                 if (metadata.width && metadata.height) {
@@ -193,11 +219,11 @@
                 video.preload = 'metadata';
                 video.onloadedmetadata = () => {
                     URL.revokeObjectURL(video.src);
-                    // Attempt to get FPS
                     let fps = 0;
-                    if (video.webkitVideoDecodedByteCount !== undefined) {
-                        const track = video.videoTracks[0];
-                        fps = track ? track.frameRate : 0;
+                    if (video.mozHasAudio !== undefined) {
+                        fps = video.mozFrameRate || 0;
+                    } else if (video.webkitAudioDecodedByteCount !== undefined) {
+                        fps = video.webkitDecodedFrameCount / video.duration;
                     }
                     resolve({
                         duration: video.duration,
@@ -208,12 +234,20 @@
                 };
                 video.onerror = () => reject(new Error("Invalid video file or unsupported format"));
                 video.src = URL.createObjectURL(file);
-                setTimeout(() => reject(new Error("Timeout: Video took too long to load")), 30000);
+                setTimeout(() => {
+                    URL.revokeObjectURL(video.src);
+                    resolve({
+                        duration: 0,
+                        width: 0,
+                        height: 0,
+                        fps: 0
+                    });
+                }, 5000);
             });
         }
 
         function displayResults() {
-            dropText.textContent = "durationCalculated";
+            dropText.textContent = "Drag and drop video files or folders here";
             resultDiv.innerHTML = `
                 <p>Total Video Files: ${totalFiles}</p>
                 <p>Total Size: ${formatFileSize(totalSize)}</p>
