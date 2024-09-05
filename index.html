@@ -3,52 +3,145 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Improved Video Metadata Extractor</title>
+    <title>Video Metadata Extractor</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
     <style>
+        html, body {
+            height: 100%;
+            overflow: hidden;
+        }
         body {
-            font-family: Arial, sans-serif;
+            font-family: 'Inter', sans-serif;
+            line-height: 1.6;
+            color: #ffffff;
+            background-color: transparent;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+        .container {
             max-width: 800px;
-            margin: 0 auto;
-            padding: 20px;
-        }
-        #dropZone {
-            border: 2px dashed #ccc;
-            border-radius: 20px;
             width: 100%;
-            margin: 20px 0;
-            padding: 20px;
             text-align: center;
+            overflow-y: auto;
+            max-height: 100vh;
+            padding: 20px;
+            box-sizing: border-box;
         }
-        #dropZone.highlight {
+        h1 {
+            margin-bottom: 20px;
+        }
+        button {
+            font-size: 18px;
+            padding: 10px 20px;
+            background-color: #ffffff;
+            color: #000000;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+            margin: 10px;
+        }
+        button:hover {
             background-color: #f0f0f0;
         }
-        #fileList {
-            margin-top: 20px;
+        button:disabled {
+            background-color: #cccccc;
+            cursor: not-allowed;
         }
-        progress {
+        #dropZone {
+            border: 2px dashed #ffffff;
+            border-radius: 20px;
+            padding: 20px;
+            margin: 20px 0;
+            transition: background-color 0.3s ease;
+        }
+        #dropZone.highlight {
+            background-color: rgba(255, 255, 255, 0.1);
+        }
+        #progressContainer {
+            margin-bottom: 20px;
+        }
+        #progressBar {
             width: 100%;
+            background-color: #ddd;
+            border-radius: 5px;
+            overflow: hidden;
+        }
+        #progressBar div {
+            height: 10px;
+            background-color: #ffffff;
+            transition: width 0.3s ease;
+        }
+        #fileList, #totalDuration, #error {
+            margin-top: 20px;
+            padding: 10px;
+            background-color: rgba(255, 255, 255, 0.1);
+            border-radius: 5px;
+        }
+        footer {
+            margin-top: 40px;
+            font-size: 14px;
+        }
+        footer a {
+            color: #ffffff;
+            text-decoration: none;
+        }
+        footer a:hover {
+            text-decoration: underline;
         }
     </style>
 </head>
 <body>
-    <h1>Improved Video Metadata Extractor</h1>
-    <div id="dropZone">
-        <p>Drag and drop video files or folders here</p>
-        <p>Or</p>
-        <input type="file" id="fileInput" multiple webkitdirectory directory>
+    <div class="container">
+        <h1>Video Metadata Extractor</h1>
+        <p>Extract metadata from your video files right in your browser. No uploads needed - all processing is done locally on your device.</p>
+        
+        <div id="dropZone">
+            <p>Drag and drop video files or folders here</p>
+            <p>Or</p>
+            <input type="file" id="fileInput" multiple webkitdirectory directory style="display: none;">
+            <button id="selectFiles">Select Files</button>
+        </div>
+
+        <div id="progressContainer" style="display: none;">
+            <div id="progressBar"><div></div></div>
+            <span id="progressText">0%</span>
+        </div>
+
+        <div id="error"></div>
+        <div id="fileList"></div>
+        <div id="totalDuration"></div>
     </div>
-    <progress id="progress" value="0" max="100"></progress>
-    <div id="fileList"></div>
+
+    <footer>
+        <p>© 2024 Video Metadata Extractor. All rights reserved.</p>
+        <p>This application processes all files locally in your browser. No data is uploaded or stored on any server.</p>
+        <p>
+            <a href="#" onclick="showPrivacyPolicy()">Privacy Policy</a> | 
+            <a href="#" onclick="showTermsOfUse()">Terms of Use</a>
+        </p>
+    </footer>
 
     <script>
         const dropZone = document.getElementById('dropZone');
         const fileInput = document.getElementById('fileInput');
+        const selectFiles = document.getElementById('selectFiles');
         const fileList = document.getElementById('fileList');
-        const progress = document.getElementById('progress');
+        const errorDiv = document.getElementById('error');
+        const progressContainer = document.getElementById('progressContainer');
+        const progressBar = document.getElementById('progressBar').firstElementChild;
+        const progressText = document.getElementById('progressText');
+        const totalDurationDiv = document.getElementById('totalDuration');
 
         let totalDuration = 0;
         let processedFiles = 0;
         let totalFiles = 0;
+
+        selectFiles.addEventListener('click', () => fileInput.click());
 
         dropZone.addEventListener('dragover', (e) => {
             e.preventDefault();
@@ -75,11 +168,7 @@
         }
 
         async function processItems(items) {
-            totalDuration = 0;
-            processedFiles = 0;
-            totalFiles = 0;
-            fileList.innerHTML = '';
-
+            resetState();
             for (let item of items) {
                 if (item.kind === 'file') {
                     const entry = item.webkitGetAsEntry();
@@ -88,6 +177,7 @@
                     }
                 }
             }
+            startProcessing();
         }
 
         async function traverseFileTree(item) {
@@ -95,7 +185,6 @@
                 const file = await new Promise(resolve => item.file(resolve));
                 if (file.type.startsWith('video/')) {
                     totalFiles++;
-                    await processVideoFile(file);
                 }
             } else if (item.isDirectory) {
                 const dirReader = item.createReader();
@@ -111,55 +200,102 @@
         }
 
         async function processFiles(files) {
-            totalDuration = 0;
-            processedFiles = 0;
-            totalFiles = files.length;
-            fileList.innerHTML = '';
-
+            resetState();
+            for (let file of files) {
+                if (file.type.startsWith('video/')) {
+                    totalFiles++;
+                }
+            }
+            startProcessing();
             for (let file of files) {
                 if (file.type.startsWith('video/')) {
                     await processVideoFile(file);
-                } else {
-                    totalFiles--;
                 }
             }
         }
 
-        async function processVideoFile(file) {
-            try {
-                const duration = await getVideoDuration(file);
-                totalDuration += duration;
-                displayFileInfo(file, duration);
-            } catch (error) {
-                console.error(`Error processing ${file.name}:`, error);
-            }
-            processedFiles++;
-            updateProgress();
+        function resetState() {
+            totalDuration = 0;
+            processedFiles = 0;
+            totalFiles = 0;
+            fileList.innerHTML = '';
+            errorDiv.textContent = '';
+            totalDurationDiv.textContent = '';
+            showProgress();
         }
 
-        function getVideoDuration(file) {
+        function showProgress() {
+            progressContainer.style.display = 'block';
+            updateProgress(0);
+        }
+
+        async function startProcessing() {
+            if (totalFiles === 0) {
+                errorDiv.textContent = 'No video files found. Please try again with video files.';
+                hideProgress();
+                return;
+            }
+            updateProgress(0);
+        }
+
+        async function processVideoFile(file) {
+            try {
+                const metadata = await getVideoMetadata(file);
+                totalDuration += metadata.duration;
+                displayFileInfo(file, metadata);
+            } catch (error) {
+                console.error(`Error processing ${file.name}:`, error);
+                errorDiv.textContent = `Error processing ${file.name}: ${error.message}`;
+            }
+            processedFiles++;
+            updateProgress((processedFiles / totalFiles) * 100);
+        }
+
+        function getVideoMetadata(file) {
             return new Promise((resolve, reject) => {
                 const video = document.createElement('video');
                 video.preload = 'metadata';
                 video.onloadedmetadata = () => {
                     URL.revokeObjectURL(video.src);
-                    resolve(video.duration);
+                    resolve({
+                        duration: video.duration,
+                        width: video.videoWidth,
+                        height: video.videoHeight
+                    });
                 };
-                video.onerror = () => reject(new Error("Invalid video file"));
+                video.onerror = () => reject(new Error("Invalid video file or unsupported format"));
                 video.src = URL.createObjectURL(file);
+
+                setTimeout(() => reject(new Error("Timeout: Video took too long to load")), 30000);
             });
         }
 
-        function displayFileInfo(file, duration) {
-            const fileInfo = document.createElement('p');
-            fileInfo.textContent = `${file.name} - Duration: ${formatDuration(duration)}`;
+        function displayFileInfo(file, metadata) {
+            const fileInfo = document.createElement('div');
+            fileInfo.innerHTML = `
+                <h2>${file.name}</h2>
+                <p>Duration: ${formatDuration(metadata.duration)}</p>
+                <p>Resolution: ${metadata.width}x${metadata.height}</p>
+                <p>Size: ${formatFileSize(file.size)}</p>
+            `;
             fileList.appendChild(fileInfo);
         }
 
+        function updateProgress(percentage) {
+            progressBar.style.width = `${percentage}%`;
+            progressText.textContent = `${Math.round(percentage)}%`;
+            if (percentage === 100) {
+                setTimeout(hideProgress, 1000);
+                displayTotalDuration();
+            }
+        }
+
+        function hideProgress() {
+            progressContainer.style.display = 'none';
+        }
+
         function displayTotalDuration() {
-            const totalInfo = document.createElement('h3');
-            totalInfo.textContent = `Total Duration: ${formatDuration(totalDuration)}`;
-            fileList.appendChild(totalInfo);
+            totalDurationDiv.textContent = `Total Duration: ${formatDuration(totalDuration)}`;
         }
 
         function formatDuration(seconds) {
@@ -169,12 +305,19 @@
             return `${hours}h ${minutes}m ${secs}s`;
         }
 
-        function updateProgress() {
-            const percentage = (processedFiles / totalFiles) * 100;
-            progress.value = percentage;
-            if (processedFiles === totalFiles) {
-                displayTotalDuration();
-            }
+        function formatFileSize(bytes) {
+            const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
+            if (bytes === 0) return '0 Byte';
+            const i = parseInt(Math.floor(Math.log(bytes) / Math.log(1024)));
+            return Math.round(bytes / Math.pow(1024, i), 2) + ' ' + sizes[i];
+        }
+
+        function showPrivacyPolicy() {
+            alert('Privacy Policy: This application does not collect or store any of your data. All processing is done locally in your browser.');
+        }
+
+        function showTermsOfUse() {
+            alert('Terms of Use: Use this application at your own risk. We are not responsible for any data loss or damages.');
         }
     </script>
 </body>
