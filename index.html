@@ -22,7 +22,7 @@
             align-items: center;
             justify-content: center;
         }
-        .container {
+        .video-overview-container {
             max-width: 800px;
             width: 100%;
             text-align: center;
@@ -31,10 +31,10 @@
             padding: 20px;
             box-sizing: border-box;
         }
-        h1 {
+        .video-overview-container h1 {
             margin-bottom: 20px;
         }
-        button {
+        .video-overview-container button {
             font-size: 18px;
             padding: 10px 20px;
             background-color: #ffffff;
@@ -45,20 +45,20 @@
             transition: background-color 0.3s ease;
             margin: 10px;
         }
-        button:hover {
+        .video-overview-container button:hover {
             background-color: #f0f0f0;
         }
-        #dropZone {
+        #videoOverviewDropZone {
             border: 2px dashed #ffffff;
             border-radius: 20px;
             padding: 20px;
             margin: 20px 0;
             transition: background-color 0.3s ease;
         }
-        #dropZone.highlight {
+        #videoOverviewDropZone.highlight {
             background-color: rgba(255, 255, 255, 0.1);
         }
-        #result {
+        #videoOverviewResult {
             margin-top: 20px;
             padding: 10px;
             background-color: rgba(255, 255, 255, 0.1);
@@ -67,23 +67,24 @@
     </style>
 </head>
 <body>
-    <div class="container">
+    <div class="video-overview-container">
         <h1>videoOverview 1.0</h1>
-        <div id="dropZone">
-            <p id="dropText">Drag and drop video files or folders here</p>
+        <div id="videoOverviewDropZone">
+            <p id="videoOverviewDropText">Drag and drop video files or folders here</p>
             <p>Or</p>
-            <input type="file" id="fileInput" multiple webkitdirectory directory style="display: none;">
-            <button id="selectFiles">Select Files</button>
+            <input type="file" id="videoOverviewFileInput" multiple webkitdirectory directory style="display: none;">
+            <button id="videoOverviewSelectFiles">Select Files</button>
         </div>
-        <div id="result"></div>
+        <div id="videoOverviewResult"></div>
     </div>
 
     <script>
-        const dropZone = document.getElementById('dropZone');
-        const fileInput = document.getElementById('fileInput');
-        const selectFiles = document.getElementById('selectFiles');
-        const resultDiv = document.getElementById('result');
-        const dropText = document.getElementById('dropText');
+    (function() {
+        const dropZone = document.getElementById('videoOverviewDropZone');
+        const fileInput = document.getElementById('videoOverviewFileInput');
+        const selectFiles = document.getElementById('videoOverviewSelectFiles');
+        const resultDiv = document.getElementById('videoOverviewResult');
+        const dropText = document.getElementById('videoOverviewDropText');
 
         let totalFiles = 0;
         let processedFiles = 0;
@@ -256,6 +257,7 @@
             const i = parseInt(Math.floor(Math.log(bytes) / Math.log(1024)));
             return (bytes / Math.pow(1024, i)).toFixed(2) + ' ' + sizes[i];
         }
+    })();
     </script>
 </body>
 </html>
