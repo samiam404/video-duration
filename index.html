@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Video Metadata Extractor</title>
+    <title>videoOverview 1.0</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
     <style>
         html, body {
@@ -68,7 +68,7 @@
 </head>
 <body>
     <div class="container">
-        <h1>Video Metadata Extractor</h1>
+        <h1>videoOverview 1.0</h1>
         <div id="dropZone">
             <p id="dropText">Drag and drop video files or folders here</p>
             <p>Or</p>
@@ -89,6 +89,7 @@
         let totalSize = 0;
         let totalDuration = 0;
         let dimensions = new Set();
+        let frameRates = new Set();
 
         selectFiles.addEventListener('click', () => fileInput.click());
 
@@ -165,6 +166,7 @@
             totalSize = 0;
             totalDuration = 0;
             dimensions.clear();
+            frameRates.clear();
             resultDiv.textContent = '';
         }
 
@@ -177,6 +179,9 @@
                 if (metadata.width && metadata.height) {
                     dimensions.add(`${metadata.width}x${metadata.height}`);
                 }
+                if (metadata.fps) {
+                    frameRates.add(metadata.fps.toFixed(2));
+                }
             } catch (error) {
                 console.error(`Error processing ${file.name}:`, error);
             }
@@ -188,10 +193,17 @@
                 video.preload = 'metadata';
                 video.onloadedmetadata = () => {
                     URL.revokeObjectURL(video.src);
+                    // Attempt to get FPS
+                    let fps = 0;
+                    if (video.webkitVideoDecodedByteCount !== undefined) {
+                        const track = video.videoTracks[0];
+                        fps = track ? track.frameRate : 0;
+                    }
                     resolve({
                         duration: video.duration,
                         width: video.videoWidth,
-                        height: video.videoHeight
+                        height: video.videoHeight,
+                        fps: fps
                     });
                 };
                 video.onerror = () => reject(new Error("Invalid video file or unsupported format"));
@@ -207,6 +219,7 @@
                 <p>Total Size: ${formatFileSize(totalSize)}</p>
                 <p>Total Duration: ${formatDuration(totalDuration)}</p>
                 <p>Detected Dimensions: ${Array.from(dimensions).join(', ') || 'None detected'}</p>
+                <p>Detected Frame Rates: ${Array.from(frameRates).join(', ') || 'None detected'}</p>
             `;
         }
 
