@@ -20,7 +20,8 @@
             display: flex;
             flex-direction: column;
             align-items: center;
-            justify-content: center;
+            justify-content: flex-start; /* Align content at the top */
+            padding-top: 20px; /* Add padding at the top */
         }
         .video-overview-container {
             max-width: 800px;
@@ -30,9 +31,6 @@
             max-height: 100vh;
             padding: 20px;
             box-sizing: border-box;
-        }
-        .video-overview-container h1 {
-            margin-bottom: 20px;
         }
         .video-overview-container button {
             font-size: 18px;
@@ -68,7 +66,6 @@
 </head>
 <body>
     <div class="video-overview-container">
-        <h1>videoOverview 1.0</h1>
         <div id="videoOverviewDropZone">
             <p id="videoOverviewDropText">Drag and drop video files or folders here</p>
             <p>Or</p>
